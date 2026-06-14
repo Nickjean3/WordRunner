@@ -73,6 +73,40 @@ with open("/usr/share/dict/words") as f:
 font = pygame.font.SysFont(None, 36)
 
 # ----------------------------
+# Starfield setup
+# ----------------------------
+def make_stars(count, speed, size_range):
+    return [
+        {
+            "x": random.randint(0, SCREEN_WIDTH),
+            "y": random.randint(0, SCREEN_HEIGHT),
+            "size": random.randint(*size_range),
+            "speed": speed,
+            "brightness": random.randint(150, 255)
+        }
+        for _ in range(count)
+    ]
+def draw_stars(surface):
+    for layer in star_layers:
+        for star in layer:
+            star["x"] -= star["speed"]
+            if star["x"] < 0:
+                star["x"] = SCREEN_WIDTH
+                star["y"] = random.randint(0, SCREEN_HEIGHT)
+            c = star["brightness"]
+            if star["size"] == 1:
+                surface.set_at((int(star["x"]), int(star["y"])), (c, c, c))
+            else:
+                pygame.draw.rect(surface, (c, c, c),
+                                 (int(star["x"]), int(star["y"]), star["size"], star["size"]))
+
+star_layers = [
+    make_stars(80,  1, (1, 1)),   # distant: tiny, slow
+    make_stars(50,  2, (1, 2)),   # mid:     small, medium
+    make_stars(25,  3, (2, 3)),   # close:   larger, fast
+]
+
+# ----------------------------
 # Scoring
 # ----------------------------
 score = 0
@@ -115,6 +149,94 @@ def projectile_rect(proj):
 def letter_rect(letter):
     return pygame.Rect(letter["x"], letter["y"], LETTER_SIZE, LETTER_SIZE)
 
+# Fridge magnet tile colors per letter type
+MAGNET_TILE_COLORS = {
+    "vowel":     (30,  90,  200),   # deep blue tile
+    "consonant": (60,  60,  60),    # dark gray tile
+    "rare":      (180, 80,  0),     # burnt orange tile
+}
+MAGNET_FONT = pygame.font.SysFont("Arial Rounded MT Bold", 26, bold=True)
+# Fallback if Arial Rounded isn't available on your system:
+# MAGNET_FONT = pygame.font.SysFont("freesansbold", 26)
+
+TILE_PADDING = 6
+TILE_RADIUS = 6  # corner rounding
+
+def draw_magnet_letter(surface, letter):
+    tile_color = MAGNET_TILE_COLORS[letter["type"]]
+    text_color = (255, 255, 255)
+
+    text_surf = MAGNET_FONT.render(letter["char"], True, text_color)
+    tw, th = text_surf.get_size()
+
+    tile_w = tw + TILE_PADDING * 2
+    tile_h = th + TILE_PADDING * 2
+    tile_x = int(letter["x"])
+    tile_y = int(letter["y"])
+
+    # Draw rounded tile
+    tile_rect = pygame.Rect(tile_x, tile_y, tile_w, tile_h)
+    pygame.draw.rect(surface, tile_color, tile_rect, border_radius=TILE_RADIUS)
+
+    # Subtle highlight on top edge for a slight 3D feel
+    highlight_rect = pygame.Rect(tile_x + 2, tile_y + 2, tile_w - 4, 3)
+    highlight_color = tuple(min(255, c + 60) for c in tile_color)
+    pygame.draw.rect(surface, highlight_color, highlight_rect, border_radius=2)
+
+    # Draw letter centered on tile
+    surface.blit(text_surf, (tile_x + TILE_PADDING, tile_y + TILE_PADDING))
+    
+def draw_rocket(surface, x, y):
+    x, y = int(x), int(y)
+    # --- Body (yellow) ---
+    pygame.draw.rect(surface, (255, 220, 0), (x + 6, y + 8, 20, 14))
+
+    # --- Nose cone (pointed right, yellow/white) ---
+    nose = [
+        (x + 26, y + 15),   # tip
+        (x + 16, y + 8),    # top
+        (x + 16, y + 22),   # bottom
+    ]
+    pygame.draw.polygon(surface, (255, 240, 80), nose)
+
+    # --- Tail block (darker yellow) ---
+    pygame.draw.rect(surface, (200, 160, 0), (x + 2, y + 9, 6, 12))
+
+    # --- Top fin (red) ---
+    top_fin = [
+        (x + 2,  y + 9),
+        (x + 10, y + 9),
+        (x + 6,  y + 2),
+    ]
+    pygame.draw.polygon(surface, (220, 40, 40), top_fin)
+
+    # --- Bottom fin (red) ---
+    bot_fin = [
+        (x + 2,  y + 21),
+        (x + 10, y + 21),
+        (x + 6,  y + 28),
+    ]
+    pygame.draw.polygon(surface, (220, 40, 40), bot_fin)
+
+    # --- Window (cockpit) ---
+    pygame.draw.circle(surface, (140, 220, 255), (x + 20, y + 15), 4)
+    pygame.draw.circle(surface, (255, 255, 255), (x + 19, y + 14), 1)  # glint
+
+    # --- Exhaust flame (animated flicker) ---
+    flicker = random.randint(4, 10)
+    flame = [
+        (x + 2,  y + 12),
+        (x - flicker, y + 15),
+        (x + 2,  y + 18),
+    ]
+    pygame.draw.polygon(surface, (255, 120, 0), flame)
+    inner_flame = [
+        (x + 2,  y + 13),
+        (x - flicker + 3, y + 15),
+        (x + 2,  y + 17),
+    ]
+    pygame.draw.polygon(surface, (255, 230, 80), inner_flame)
+
 def cash_word():
     global word_bank, confirmed_words, score, current_word_score
 
@@ -143,10 +265,11 @@ def cash_word():
     current_word_score = 0
     
 def draw_title_screen():
-    screen.fill((0, 0, 0))
+    screen.fill((5, 5, 20))
+    draw_stars(screen)
 
-    title_font = pygame.font.SysFont(None, 96)
-    menu_font = pygame.font.SysFont(None, 40)
+    title_font = pygame.font.SysFont("Arial Rounded MT Bold", 96, bold=True)
+    menu_font = pygame.font.SysFont("Arial Rounded MT Bold", 40, bold=True)
 
     title_surface = title_font.render("WORD RUNNER", True, (255, 255, 255))
     screen.blit(title_surface, (SCREEN_WIDTH//2 - title_surface.get_width()//2, 150))
@@ -163,9 +286,10 @@ def draw_title_screen():
     pygame.display.flip()
     
 def draw_instructions_screen():
-    screen.fill((0, 0, 0))
-    font_small = pygame.font.SysFont(None, 28)
-    font_header = pygame.font.SysFont(None, 48)
+    screen.fill((5, 5, 20))
+    draw_stars(screen)
+    font_small = pygame.font.SysFont("Arial Rounded MT Bold", 28)
+    font_header = pygame.font.SysFont("Arial Rounded MT Bold", 48, bold=True)
 
     header = font_header.render("HOW TO PLAY", True, (255, 255, 255))
     screen.blit(header, (SCREEN_WIDTH//2 - header.get_width()//2, 60))
@@ -251,7 +375,8 @@ while running:
     # GAME OVER Screen
     # ----------------------------
     if player_dead:
-        screen.fill((0, 0, 0))
+        screen.fill((5, 5, 20))
+        draw_stars(screen)
         game_over_surface = font.render("GAME OVER", True, (255, 0, 0))
         screen.blit(game_over_surface, (SCREEN_WIDTH//2 - 100, SCREEN_HEIGHT//2 - 100))
         # Draw final score
@@ -346,12 +471,12 @@ while running:
             break
 
     # --- Draw ---
-    screen.fill((0, 0, 0))
-    pygame.draw.rect(screen, (255, 255, 255), (*player_pos, PLAYER_SIZE, PLAYER_SIZE))
+    screen.fill((5, 5, 20))
+    draw_stars(screen)
+                             
+    draw_rocket(screen, player_pos[0], player_pos[1])
     for letter in letters:
-        color = LETTER_COLORS[letter["type"]]
-        text_surface = font.render(letter["char"], True, color)
-        screen.blit(text_surface, (letter["x"], letter["y"]))
+        draw_magnet_letter(screen, letter)
     for proj in projectiles:
         pygame.draw.rect(screen, (0, 255, 0), (proj["x"], proj["y"], PROJECTILE_SIZE, PROJECTILE_SIZE))
 
